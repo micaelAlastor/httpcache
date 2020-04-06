@@ -103,6 +103,8 @@ type Transport struct {
 	Cache     Cache
 	// If true, responses returned from the cache will be given an extra header, X-From-Cache
 	MarkCachedResponses bool
+	//CacheAll disables all freshness etc checks to ensure we cache everything and our cache replay can be hermetic
+	CacheAll bool
 }
 
 // NewTransport returns a new Transport with the
@@ -159,7 +161,7 @@ func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 
 		if varyMatches(cachedResp, req) {
 			// Can only use cached value if the new request doesn't Vary significantly
-			freshness := getFreshness(cachedResp.Header, req.Header)
+			freshness := getFreshness(cachedResp.Header, req.Header, t.CacheAll)
 			if freshness == fresh {
 				return cachedResp, nil
 			}
@@ -292,7 +294,10 @@ var clock timer = &realClock{}
 //
 // Because this is only a private cache, 'public' and 'private' in cache-control aren't
 // signficant. Similarly, smax-age isn't used.
-func getFreshness(respHeaders, reqHeaders http.Header) (freshness int) {
+func getFreshness(respHeaders, reqHeaders http.Header, cacheAll bool) (freshness int) {
+	if cacheAll {
+		return fresh
+	}
 	respCacheControl := parseCacheControl(respHeaders)
 	reqCacheControl := parseCacheControl(reqHeaders)
 	if _, ok := reqCacheControl["no-cache"]; ok {
